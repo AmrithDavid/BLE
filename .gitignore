@@ -1,2 +1,5 @@
-*.xlsx
-*.csv
+*
+!.gitignore
+!.py
+!FSMApp.ini
+!requirements.txt
