@@ -12,11 +12,28 @@ import numpy as np
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import datetime
- 
-# Device address and characteristic UUID
-DEVICE_ADDRESS = "F0:D8:26:2C:4E:61"
-FSM_DATA_CHAR_UUID = "c042d543-3929-48c9-af11-cf252f5ce7f4"
- 
+import configparser
+import sys
+import os
+
+if os.path.exists('FSMApp.ini'):
+    cfg = configparser.ConfigParser()
+    cfg.read('FSMApp.ini')
+else:    
+    print("Settings not found")
+    time.sleep(1)
+    sys.exit()    
+
+
+# Load settings
+try:
+    DEVICE_ADDRESS = cfg['SETTINGS']['Device_address']
+    FSM_DATA_CHAR_UUID = cfg['SETTINGS']['FSM_data_characteristic_UUID']
+except KeyError:
+    print("Settings not found")
+    time.sleep(1)
+    sys.exit()
+
 # Global variables for data
 time_data = []
 sample_time_data = []
@@ -25,9 +42,11 @@ array_b_data = [[] for _ in range(21)]  # 6 wavelengths * 3 PDs + 1 LED OFF * 3 
 data_queue = Queue()
 start_time = None
 running = True
+start_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+filename_csv = f"fsm_data_{start_timestamp}.csv"
  
 # Wavelength options
-wavelength_options = ["W1", "W2", "W3", "W4", "W5", "W6", "LED OFF"]
+wavelength_options = ["784 nm", "800 nm", "818 nm", "835 nm", "851 nm", "881 nm", "LED OFF"]
  
 def parse_fsm_data(data):
     # Parse time data (bytes 1-6)
@@ -56,6 +75,7 @@ def notification_handler(sender, data):
         sample_time, array_a_data, array_b_data = parse_fsm_data(data)
         timestamp = time.time() - start_time
         data_queue.put((timestamp, sample_time, array_a_data, array_b_data))
+        csv_update(timestamp, sample_time, array_a_data, array_b_data)
         print(f"Time: {timestamp:.2f}s, Sample Time: {sample_time:.2f}s, Data received and queued")
     except Exception as e:
         print(f"Error parsing data: {e}")
@@ -81,10 +101,6 @@ def create_gui():
  
     ax1.set_title("LED A")
     ax2.set_title("LED B")
-    for ax in (ax1, ax2):
-        ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Voltage (V)")
-        ax.grid(True)
  
     control_frame = ttk.Frame(main_frame)
     control_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
@@ -106,7 +122,11 @@ def create_gui():
     lines_b = [ax2.plot([], [], label=f'PD{i+1}')[0] for i in range(3)]
  
     for ax in (ax1, ax2):
-        ax.legend()
+        ax.legend(loc='lower right')
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel("Voltage (V)")
+        ax.grid(True)
+        ax.set_yscale("log")
  
     def update_plot():
         if time_data:
@@ -210,9 +230,22 @@ def save_to_excel(data, filename=None):
     # Save the workbook
     wb.save(filename)
     print(f"Data saved to {filename}")
- 
+    os.remove(filename_csv)
+
+def csv_create():
+    with open(filename_csv, 'w+') as file:
+        headers = ["System Time (s)", "Sample Time (s)"] + [f"Array {'A' if i < 21 else 'B'} {'W' + str((i%21)//3 + 1) if (i%21) < 18 else 'LED OFF'} PD{(i%21)%3 + 1}" for i in range(42)]
+        file.write(", ".join(headers))
+
+def csv_update(timestamp, sample_time, array_a_data, array_b_data):
+    with open(filename_csv, 'a') as file:
+        file.write(", ".join(timestamp, sample_time))
+        file.write(", ".join(array_a_data))
+        file.write(", ".join(array_b_data))
+        
 def main():
     global running
+    csv_create()
     loop = asyncio.new_event_loop()
     ble_thread = threading.Thread(target=run_asyncio_loop, args=(loop,))
     ble_thread.start()
