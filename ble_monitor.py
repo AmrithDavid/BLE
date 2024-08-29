@@ -29,6 +29,7 @@ else:
 try:
     DEVICE_ADDRESS = cfg['SETTINGS']['Device_address']
     FSM_DATA_CHAR_UUID = cfg['SETTINGS']['FSM_data_characteristic_UUID']
+    PLOTSTYLE = cfg['SETTINGS']['Plot_style']
 except KeyError:
     print("Settings not found")
     time.sleep(1)
@@ -126,7 +127,7 @@ def create_gui():
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Voltage (V)")
         ax.grid(True)
-        ax.set_yscale("log")
+        ax.set_yscale(PLOTSTYLE)
  
     def update_plot():
         if time_data:
@@ -238,10 +239,11 @@ def csv_create():
         file.write(", ".join(headers))
 
 def csv_update(timestamp, sample_time, array_a_data, array_b_data):
+    return
     with open(filename_csv, 'a') as file:
-        file.write(", ".join(timestamp, sample_time))
-        file.write(", ".join(array_a_data))
-        file.write(", ".join(array_b_data))
+        file.write("{}, {}".format(timestamp, sample_time))
+        file.write(", ".join(map(str, array_a_data)))
+        file.write(", ".join(map(str, array_b_data)))
         
 def main():
     global running
